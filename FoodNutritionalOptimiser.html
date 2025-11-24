@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Nutrient Optimizer</title>
+<style>
+  body { font-family: sans-serif; margin: 20px; }
+  h1 { font-size: 1.4rem; }
+  .row { margin-bottom: 10px; }
+  .food-list { border: 1px solid #ccc; padding: 10px; max-width: 400px; }
+  .food-item { display: flex; align-items: center; margin-bottom: 5px; }
+  .food-item label { margin-left: 5px; }
+  .targets { margin-top: 20px; }
+  .targets input { width: 80px; }
+  .result { margin-top: 20px; white-space: pre; font-family: monospace; }
+</style>
+</head>
+<body>
+<h1>Nutrient Optimizer</h1>
+<div class="row">
+  <textarea id="jsonInput" rows="8" cols="60" placeholder="Paste JSON array here"></textarea>
+</div>
+<div class="row">
+  <button id="loadBtn">Load Foods</button>
+</div>
+<div class="food-list" id="foodList"></div>
+
+<div class="targets">
+  <h2>Targets (per day)</h2>
+  <div>Carbs (g): <input id="tCarbs" value="260" /></div>
+  <div>Sugars (g): <input id="tSugars" value="90" /></div>
+  <div>Fat (g): <input id="tFat" value="70" /></div>
+  <div>Saturates (g): <input id="tSaturates" value="20" /></div>
+  <div>Protein (g): <input id="tProtein" value="50" /></div>
+  <div>Fibre (g): <input id="tFibre" value="30" /></div>
+  <div>Kcal: <input id="tKcal" value="2000" /></div>
+  <button id="optBtn">Optimise</button>
+</div>
+
+<div class="result" id="result"></div>
+
+<script>
+function kcalOf(item) {
+  return (4 * (item.carbsPer100g + item.sugarsPer100g + item.proteinPer100g) + 9 * item.fatPer100g);
+}
+
+function optimise(selected, targets) {
+  const n = selected.length;
+  if (n === 0) return {};
+
+  const vars = new Array(n).fill(100); // start at 100g each
+
+  function total(vars) {
+    const sum = {
+      carbs: 0, sugars: 0, fat: 0, sat: 0, prot: 0, fib: 0, kcal: 0
+    };
+    for (let i = 0; i < n; i++) {
+      const v = vars[i] / 100;
+      const it = selected[i];
+      sum.carbs += it.carbsPer100g * v;
+      sum.sugars += it.sugarsPer100g * v;
+      sum.fat += it.fatPer100g * v;
+      sum.sat += it.saturatesPer100g * v;
+      sum.prot += it.proteinPer100g * v;
+      sum.fib += it.fiberPer100g * v;
+      sum.kcal += kcalOf(it) * v;
+    }
+    return sum;
+  }
+
+  function error(vars) {
+    const s = total(vars);
+    const kcalErr = (s.kcal - targets.kcal);
+    if (Math.abs(kcalErr) > 50) {
+      return kcalErr * kcalErr * 1e6;
+    }
+    const wCarbs = 1, wSug = 1, wFat = 1, wSat = 2, wProt = 1, wFib = 1;
+    return wCarbs*(s.carbs - targets.carbs)**2 +
+           wSug*(s.sugars - targets.sugars)**2 +
+           wFat*(s.fat - targets.fat)**2 +
+           wSat*(s.sat - targets.sat)**2 +
+           wProt*(s.prot - targets.protein)**2 +
+           wFib*(s.fib - targets.fibre)**2;
+  }
+
+  for (let iter = 0; iter < 3000; iter++) {
+    for (let i = 0; i < n; i++) {
+      const old = vars[i];
+      const step = (Math.random() - 0.5) * 20;
+      vars[i] = Math.max(0, old + step);
+      const eNew = error(vars);
+      const eOld = error(vars.map((v,j)=> j===i? old: v));
+      if (eNew > eOld) vars[i] = old;
+    }
+  }
+
+  return { vars, totals: total(vars) };
+}
+
+const loadBtn = document.getElementById('loadBtn');
+const foodList = document.getElementById('foodList');
+const optBtn = document.getElementById('optBtn');
+const result = document.getElementById('result');
+
+loadBtn.onclick = () => {
+  foodList.innerHTML = '';
+  try {
+    const data = JSON.parse(document.getElementById('jsonInput').value);
+    data.forEach((f, idx) => {
+      const div = document.createElement('div');
+      div.className = 'food-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = 'f' + idx;
+      const lbl = document.createElement('label');
+      lbl.htmlFor = cb.id;
+      lbl.textContent = f.name;
+      div.appendChild(cb);
+      div.appendChild(lbl);
+      foodList.appendChild(div);
+    });
+  } catch(e) {
+    alert('Invalid JSON');
+  }
+};
+
+optBtn.onclick = () => {
+  const data = JSON.parse(document.getElementById('jsonInput').value);
+  const selected = [];
+  data.forEach((f, idx) => {
+    if (document.getElementById('f' + idx)?.checked) selected.push(f);
+  });
+  const targets = {
+    carbs: +document.getElementById('tCarbs').value,
+    sugars: +document.getElementById('tSugars').value,
+    fat: +document.getElementById('tFat').value,
+    saturates: +document.getElementById('tSaturates').value,
+    protein: +document.getElementById('tProtein').value,
+    fibre: +document.getElementById('tFibre').value,
+    kcal: +document.getElementById('tKcal').value
+  };
+  const out = optimise(selected, targets);
+  if (!out.vars) {
+    result.textContent = 'No food selected.';
+    return;
+  }
+  let txt = '';
+  selected.forEach((f, i) => {
+    txt += f.name + ': ' + out.vars[i].toFixed(1) + ' g\n';
+  });
+  txt += '\nTotals:\n' + JSON.stringify(out.totals, null, 2);
+  result.textContent = txt;
+};
+</script>
+</body>
+</html>
