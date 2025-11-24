@@ -105,7 +105,9 @@ const result = document.getElementById('result');
 loadBtn.onclick = () => {
   foodList.innerHTML = '';
   try {
-    const data = JSON.parse(document.getElementById('jsonInput').value);
+    const txt = document.getElementById("jsonInput").value.trim();
+    const userData = txt.length > 0 ? JSON.parse(txt) : [];
+    const data = (window.knownFoods || []).concat(userData);
     data.forEach((f, idx) => {
       const div = document.createElement('div');
       div.className = 'food-item';
