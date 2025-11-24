@@ -39,6 +39,7 @@
 
 <div class="result" id="result"></div>
 
+<script src="known-foods.js"></script>
 <script>
 function kcalOf(item) {
   return (4 * (item.carbsPer100g + item.sugarsPer100g + item.proteinPer100g) + 9 * item.fatPer100g);
@@ -48,12 +49,10 @@ function optimise(selected, targets) {
   const n = selected.length;
   if (n === 0) return {};
 
-  const vars = new Array(n).fill(100); // start at 100g each
+  const vars = new Array(n).fill(100);
 
   function total(vars) {
-    const sum = {
-      carbs: 0, sugars: 0, fat: 0, sat: 0, prot: 0, fib: 0, kcal: 0
-    };
+    const sum = { carbs: 0, sugars: 0, fat: 0, sat: 0, prot: 0, fib: 0, kcal: 0 };
     for (let i = 0; i < n; i++) {
       const v = vars[i] / 100;
       const it = selected[i];
@@ -71,9 +70,7 @@ function optimise(selected, targets) {
   function error(vars) {
     const s = total(vars);
     const kcalErr = (s.kcal - targets.kcal);
-    if (Math.abs(kcalErr) > 50) {
-      return kcalErr * kcalErr * 1e6;
-    }
+    if (Math.abs(kcalErr) > 50) return kcalErr * kcalErr * 1e6;
     const wCarbs = 1, wSug = 1, wFat = 1, wSat = 2, wProt = 1, wFib = 1;
     return wCarbs*(s.carbs - targets.carbs)**2 +
            wSug*(s.sugars - targets.sugars)**2 +
@@ -102,34 +99,39 @@ const foodList = document.getElementById('foodList');
 const optBtn = document.getElementById('optBtn');
 const result = document.getElementById('result');
 
-loadBtn.onclick = () => {
+let allFoods = [];
+
+function renderFoodList(data) {
   foodList.innerHTML = '';
-  try {
-    const txt = document.getElementById("jsonInput").value.trim();
-    const userData = txt.length > 0 ? JSON.parse(txt) : [];
-    const data = (window.knownFoods || []).concat(userData);
-    data.forEach((f, idx) => {
-      const div = document.createElement('div');
-      div.className = 'food-item';
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.id = 'f' + idx;
-      const lbl = document.createElement('label');
-      lbl.htmlFor = cb.id;
-      lbl.textContent = f.name;
-      div.appendChild(cb);
-      div.appendChild(lbl);
-      foodList.appendChild(div);
-    });
-  } catch(e) {
-    alert('Invalid JSON');
-  }
-};
+  data.forEach((f, idx) => {
+    const div = document.createElement('div');
+    div.className = 'food-item';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.id = 'f' + idx;
+    const lbl = document.createElement('label');
+    lbl.htmlFor = cb.id;
+    lbl.textContent = f.name;
+    div.appendChild(cb);
+    div.appendChild(lbl);
+    foodList.appendChild(div);
+  });
+}
+
+function loadFoods() {
+  const txt = document.getElementById("jsonInput").value.trim();
+  const userData = txt.length > 0 ? JSON.parse(txt) : [];
+  allFoods = (window.knownFoods || []).concat(userData);
+  renderFoodList(allFoods);
+}
+
+loadBtn.onclick = loadFoods;
+
+document.addEventListener('DOMContentLoaded', loadFoods);
 
 optBtn.onclick = () => {
-  const data = JSON.parse(document.getElementById('jsonInput').value);
   const selected = [];
-  data.forEach((f, idx) => {
+  allFoods.forEach((f, idx) => {
     if (document.getElementById('f' + idx)?.checked) selected.push(f);
   });
   const targets = {
